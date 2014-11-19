@@ -8,6 +8,7 @@
  * @property int $dialog_id
  * @property string $message
  * @property bool $new
+ * @property int $lastmod
  * @property int $created
  *
  * @property User[] $members
@@ -36,8 +37,8 @@ class Dialog extends RActiveRecord
 		return array(
 			'dialog' => array(self::BELONGS_TO, 'Dialog', 'dialog_id'),
 			'sender' => array(self::BELONGS_TO, 'User', 'user_id'),
-			'members' => array(self::MANY_MANY, 'User', 'dialog_user(dialog_id, user_id)'),
-			'lastMessage' => array(self::HAS_ONE, 'Dialog', 'dialog_id', 'scopes' => 'last', 'together' => false, 'with' => array('sender' => array('together' => false))),
+			'members' => array(self::MANY_MANY, 'User', 'dialog_user(dialog_id, user_id)', 'together' => false),
+			'lastMessage' => array(self::HAS_ONE, 'Dialog', 'dialog_id', 'scopes' => 'last', 'together' => false),
 		);
 	}
 
@@ -72,8 +73,42 @@ class Dialog extends RActiveRecord
 		$t = $this->getTableAlias(false, false);
 		$criteria = $this->lastCondition()->dbCriteria;
 		$criteria->with['lastMessage'] = array('together' => false);
+		$criteria->with['members'] = array('together' => false);
 		$criteria->join .= " INNER JOIN `dialog_user` `u` ON (`u`.`dialog_id` = `{$t}`.`id` AND `u`.`user_id` = :userId)";
 		$criteria->params[':userId'] = $userId;
+		$criteria->order = "{$t}.lastmod DESC";
+		return $this;
+	}
+
+	public function messages() {
+		$t = $this->getTableAlias(false, false);
+		$criteria = $this->dbCriteria;
+		$criteria->addCondition("{$t}.dialog_id != 0");
+		return $this;
+	}
+
+	public function after($timestamp) {
+		$t = $this->getTableAlias(false, false);
+		$criteria = $this->dbCriteria;
+		$criteria->addCondition("{$t}.created >= FROM_UNIXTIME(:timestamp)");
+		$criteria->params[':timestamp'] = $timestamp;
+		$criteria->order = "{$t}.created ASC";
+		return $this;
+	}
+
+	public function user($userId) {
+		$t = $this->getTableAlias(false, false);
+		$criteria = $this->dbCriteria;
+		$criteria->join .= " JOIN dialog_user du ON (du.dialog_id = {$t}.dialog_id AND du.user_id = :userId)";
+		$criteria->params[':userId'] = $userId;
+		return $this;
+	}
+
+	public function senderNot($userId) {
+		$t = $this->getTableAlias(false, false);
+		$criteria = $this->dbCriteria;
+		$criteria->addCondition("{$t}.user_id != :senderId");
+		$criteria->params[':senderId'] = $userId;
 		return $this;
 	}
 
@@ -109,9 +144,15 @@ class Dialog extends RActiveRecord
 		return $dialog;
 	}
 
-	public static function invalidateNew($dialogId, $userId) {
+	public static function invalidateNewMessages($messageIds, $userId) {
 		// Инвалидируем сообщения только если отправитель не является текущим пользователем
-		return Dialog::model()->updateAll(array('new' => 0), array('condition' => 'dialog_id = :dialogId AND user_id != :userId', 'params' => array(':dialogId' => $dialogId, ':userId' => $userId)));
+		$ids = implode(',', $messageIds);
+		return Dialog::model()->updateAll(array('new' => 0, 'lastmod' => new CDbExpression('NOW()')), array('condition' => "id IN ({$ids}) AND user_id != :userId", 'params' => array(':userId' => $userId)));
+	}
+
+	public static function invalidateNewDialog($dialogId, $userId) {
+		// Инвалидируем сообщения только если отправитель не является текущим пользователем
+		return Dialog::model()->updateAll(array('new' => 0, 'lastmod' => new CDbExpression('NOW()')), array('condition' => 'dialog_id = :dialogId AND user_id != :userId', 'params' => array(':dialogId' => $dialogId, ':userId' => $userId)));
 	}
 
 	/**
@@ -148,6 +189,8 @@ class Dialog extends RActiveRecord
 		$message->user_id = $senderId;
 		$message->dialog_id = $this->id;
 		$message->save();
+		$this->lastmod = new CDbExpression('NOW()');
+		$this->save(false, array('lastmod'));
 		return $message;
 	}
 
@@ -165,6 +208,10 @@ class Dialog extends RActiveRecord
 		$criteria->addCondition('members.members = :members');
 		$criteria->params[':members'] = implode(',', $members);
 		return Dialog::model()->resetScope()->findAll($criteria);
+	}
+
+	public function getFormattedDate() {
+		return Text::relativeTime(is_object($this->created) ? time() : (int)$this->created, 1);
 	}
 
 }
