@@ -147,12 +147,12 @@ class Dialog extends RActiveRecord
 	public static function invalidateNewMessages($messageIds, $userId) {
 		// Инвалидируем сообщения только если отправитель не является текущим пользователем
 		$ids = implode(',', $messageIds);
-		return Dialog::model()->updateAll(array('new' => 0, 'lastmod' => new CDbExpression('NOW()')), array('condition' => "id IN ({$ids}) AND user_id != :userId", 'params' => array(':userId' => $userId)));
+		return Dialog::model()->updateAll(array('new' => 0, 'created' => new CDbExpression('created'), 'lastmod' => new CDbExpression('NOW()')), array('condition' => "id IN ({$ids}) AND user_id != :userId", 'params' => array(':userId' => $userId)));
 	}
 
 	public static function invalidateNewDialog($dialogId, $userId) {
 		// Инвалидируем сообщения только если отправитель не является текущим пользователем
-		return Dialog::model()->updateAll(array('new' => 0, 'lastmod' => new CDbExpression('NOW()')), array('condition' => 'dialog_id = :dialogId AND user_id != :userId', 'params' => array(':dialogId' => $dialogId, ':userId' => $userId)));
+		return Dialog::model()->updateAll(array('new' => 0, 'created' => new CDbExpression('created'), 'lastmod' => new CDbExpression('NOW()')), array('condition' => 'dialog_id = :dialogId AND user_id != :userId', 'params' => array(':dialogId' => $dialogId, ':userId' => $userId)));
 	}
 
 	/**
@@ -212,6 +212,15 @@ class Dialog extends RActiveRecord
 
 	public function getFormattedDate() {
 		return Text::relativeTime(is_object($this->created) ? time() : (int)$this->created, 1);
+	}
+
+	public static function getUnreadDialogsCount($userId) {
+		$db = Yii::app()->db;
+		$result = $db->createCommand("SELECT COUNT(DISTINCT d.id) FROM dialog d JOIN dialog m ON m.dialog_id = d.id AND m.user_id != :userId WHERE d.dialog_id = 0 AND m.new = 1")
+			->queryScalar(array(
+				':userId' => $userId,
+			));
+		return (int)$result;
 	}
 
 }
