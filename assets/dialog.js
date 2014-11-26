@@ -24,13 +24,18 @@ $(function() {
 		$(document).on('submit', '#' + options.sendFormId, function(e) {
 			e.preventDefault();
 			var $form = $(this);
+			var formData = new FormData($form.get(0));
 			var $container = $(options.containerSelector);
 			$container.append('<div class="message-loading"></div>');
+			console.log(formData);
 			$.ajax({
 				url: $form.attr('action'),
 				method: 'POST',
 				dataType: 'json',
-				data: $form.serialize(),
+				cache: false,
+				processData: false,
+				contentType: false,
+				data: formData,
 				success: function(data) {
 					Plugin.newMessages(data);
 					if(!lpLoading) {
@@ -41,7 +46,7 @@ $(function() {
 					console.error('Send error');
 				}
 			});
-			$form.find('textarea').val('');
+			$form.reset();
 		});
 
 		if(options.autoResize) {

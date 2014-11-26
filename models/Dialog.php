@@ -39,6 +39,7 @@ class Dialog extends RActiveRecord
 			'sender' => array(self::BELONGS_TO, 'User', 'user_id'),
 			'members' => array(self::MANY_MANY, 'User', 'dialog_user(dialog_id, user_id)', 'together' => false),
 			'lastMessage' => array(self::HAS_ONE, 'Dialog', 'dialog_id', 'scopes' => 'last', 'together' => false),
+			'files' => array(self::MANY_MANY, 'UserFiles', 'dialog_user_files(dialog_id, user_files_id)', 'together' => false),
 		);
 	}
 
