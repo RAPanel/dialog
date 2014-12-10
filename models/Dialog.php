@@ -200,7 +200,7 @@ class Dialog extends RActiveRecord
 		return "SELECT members.dialog_id, GROUP_CONCAT(members.user_id ORDER BY members.user_id ASC) members FROM dialog_user members GROUP BY members.dialog_id";
 	}
 
-	public static function getDialogsByMembers($members)
+	public static function getDialogsByMembers($members, $name = null)
 	{
 		sort($members);
 		$members = array_unique($members);
@@ -208,6 +208,8 @@ class Dialog extends RActiveRecord
 		$criteria->join = "JOIN (" . self::getMembersSql() . ") members ON (members.dialog_id = t.id)";
 		$criteria->addCondition('members.members = :members');
 		$criteria->params[':members'] = implode(',', $members);
+		if($name !== null)
+			$criteria->compare("t.message", $name);
 		return Dialog::model()->resetScope()->findAll($criteria);
 	}
 
@@ -217,7 +219,7 @@ class Dialog extends RActiveRecord
 
 	public static function getUnreadDialogsCount($userId) {
 		$db = Yii::app()->db;
-		$result = $db->createCommand("SELECT COUNT(DISTINCT d.id) FROM dialog d JOIN dialog m ON m.dialog_id = d.id AND m.user_id != :userId WHERE d.dialog_id = 0 AND m.new = 1")
+		$result = $db->createCommand("SELECT COUNT(DISTINCT d.id) FROM dialog d JOIN dialog_user members ON d.user_id = members.dialog_id JOIN dialog m ON m.dialog_id = d.id AND m.user_id != :userId WHERE d.dialog_id = 0 AND m.new = 1")
 			->queryScalar(array(
 				':userId' => $userId,
 			));
